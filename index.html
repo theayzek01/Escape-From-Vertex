@@ -822,132 +822,157 @@ POSITIONING: Türkiye'nin En Genç Teknoloji Şirketi
             });
         }
 
-        function buildWorld() {
-            const entities = state.config.scene.world;
-            
-            // Default ambient light
-            const ambientLight = new THREE.AmbientLight(0x222222);
-            scene.add(ambientLight);
+            function createEntity(entData) {
+        let entGroup = new THREE.Group();
+        entGroup.name = entData.name;
 
-            entities.forEach(ent => {
-                let entGroup = new THREE.Group();
-                entGroup.name = ent.name;
+        // Position, rotation, scale
+        if (entData.position) entGroup.position.set(entData.position[0], entData.position[1], entData.position[2]);
+        if (entData.rotation) {
+            entGroup.rotation.set(
+                THREE.MathUtils.degToRad(entData.rotation[0]),
+                THREE.MathUtils.degToRad(entData.rotation[1]),
+                THREE.MathUtils.degToRad(entData.rotation[2])
+            );
+        }
+        if (entData.scale) entGroup.scale.set(entData.scale[0], entData.scale[1], entData.scale[2]);
 
-                // Position, rotation, scale
-                if (ent.position) entGroup.position.set(ent.position[0], ent.position[1], ent.position[2]);
-                if (ent.rotation) {
-                    entGroup.rotation.set(
-                        THREE.MathUtils.degToRad(ent.rotation[0]),
-                        THREE.MathUtils.degToRad(ent.rotation[1]),
-                        THREE.MathUtils.degToRad(ent.rotation[2])
-                    );
-                }
-                if (ent.scale) entGroup.scale.set(ent.scale[0], ent.scale[1], ent.scale[2]);
-
-                // Parse components
-                if (ent.components) {
-                    ent.components.forEach(comp => {
-                        // 1. Mesh Renderer
-                        if (comp.type === "Mesh Renderer") {
-                            const meshObj = state.meshes[comp.mesh];
-                            if (meshObj) {
-                                const clonedMesh = meshObj.clone();
-                                const material = getMaterial(comp.material);
-                                clonedMesh.traverse(child => {
-                                    if (child.isMesh) {
-                                        child.material = material;
-                                        child.castShadow = true;
-                                        child.receiveShadow = true;
-                                    }
-                                });
-                                entGroup.add(clonedMesh);
+        // Parse components
+        if (entData.components) {
+            entData.components.forEach(comp => {
+                // 1. Mesh Renderer
+                if (comp.type === "Mesh Renderer") {
+                    const meshObj = state.meshes[comp.mesh];
+                    if (meshObj) {
+                        const clonedMesh = meshObj.clone();
+                        const material = getMaterial(comp.material);
+                        clonedMesh.traverse(child => {
+                            if (child.isMesh) {
+                                child.material = material;
+                                child.castShadow = true;
+                                child.receiveShadow = true;
                             }
-                        }
-                        
-                        // 2. Light components
-                        if (comp.type === "Spot Light") {
-                            const color = comp.color ? new THREE.Color(comp.color[0], comp.color[1], comp.color[2]) : 0xffffff;
-                            const light = new THREE.SpotLight(color, 2.0, 30, THREE.MathUtils.degToRad(45), 0.5, 1.0);
-                            light.castShadow = true;
-                            // Set light direction
-                            if (comp.direction) {
-                                const targetObj = new THREE.Object3D();
-                                targetObj.position.set(
-                                    entGroup.position.x + comp.direction[0],
-                                    entGroup.position.y + comp.direction[1],
-                                    entGroup.position.z + comp.direction[2]
-                                );
-                                scene.add(targetObj);
-                                light.target = targetObj;
-                            }
-                            entGroup.add(light);
-                        }
-
-                        if (comp.type === "Point Light") {
-                            const color = comp.color ? new THREE.Color(comp.color[0], comp.color[1], comp.color[2]) : 0xffffff;
-                            const light = new THREE.PointLight(color, 1.5, 20);
-                            light.castShadow = true;
-                            entGroup.add(light);
-                        }
-                    });
-                }
-
-                // Add to scene
-                scene.add(entGroup);
-
-                // Handle static collision items (wall, door, prison, table, drawer)
-                const collisionExclusions = ["player", "hand", "collided", "granny", "spider"];
-                const isExcluded = collisionExclusions.includes(ent.name) || ent.name.startsWith("key") || ent.name === "screw" || ent.name === "hummer" || ent.name === "masterKey";
-                
-                // If the entity is a static collider, build a bounding box
-                if (!isExcluded) {
-                    // Force bounding box computation on children
-                    entGroup.updateMatrixWorld(true);
-                    const box = new THREE.Box3().setFromObject(entGroup);
-                    
-                    // Skip if the bounding box is empty/invalid
-                    if (!box.isEmpty()) {
-                        colliders.push({
-                            name: ent.name,
-                            box: box,
-                            group: entGroup
                         });
+                        entGroup.add(clonedMesh);
                     }
                 }
-
-                // Setup interactive entities
-                const interactiveItems = [
-                    "key1", "key2", "key3", "key4", "key5", "key6",
-                    "screw", "hummer", "masterKey",
-                    "door1", "door2", "door3", "door4", "door5", "door6", "masterdoor",
-                    "drawer"
-                ];
-                if (interactiveItems.includes(ent.name) || ent.name.startsWith("door") || ent.name.startsWith("key")) {
-                    interactiveEntities.push({
-                        name: ent.name,
-                        group: entGroup,
-                        unlocked: false,
-                        pickedUp: false
-                    });
+                
+                // 2. Lights
+                if (comp.type === "Spot Light") {
+                    const color = comp.color ? new THREE.Color(comp.color[0], comp.color[1], comp.color[2]) : 0xffffff;
+                    // Flashlight: intensity = 15.0, distance = 100, angle = 45 deg
+                    const light = new THREE.SpotLight(color, 25.0, 100, THREE.MathUtils.degToRad(45), 0.5, 1.0);
+                    light.castShadow = true;
+                    
+                    const targetObj = new THREE.Object3D();
+                    targetObj.position.set(0, 0, -10); // Point forward
+                    entGroup.add(targetObj);
+                    light.target = targetObj;
+                    
+                    entGroup.add(light);
                 }
 
-                // Track Granny
-                if (ent.name === "granny") {
-                    grannyMesh = entGroup;
-                }
-            });
-
-            // Adjust textures repeat settings for specific walls
-            scene.traverse(child => {
-                if (child.isMesh && child.material && child.material.map) {
-                    child.material.map.repeat.set(1, 1);
-                    child.material.map.needsUpdate = true;
+                if (comp.type === "Point Light") {
+                    const color = comp.color ? new THREE.Color(comp.color[0], comp.color[1], comp.color[2]) : 0xffffff;
+                    const light = new THREE.PointLight(color, 12.0, 40, 1.0);
+                    light.castShadow = true;
+                    entGroup.add(light);
                 }
             });
         }
 
-        // Gameplay check interaction
-        function checkInteractions() {
+        // Process children recursively
+        if (entData.children) {
+            entData.children.forEach(childData => {
+                const childGroup = createEntity(childData);
+                entGroup.add(childGroup);
+            });
+        }
+
+        return entGroup;
+    }
+
+    function buildWorld() {
+        const entities = state.config.scene.world;
+
+        // Default ambient light (enhanced so the environment is slightly visible even without flashlight)
+        const ambientLight = new THREE.AmbientLight(0x444444);
+        scene.add(ambientLight);
+
+        entities.forEach(ent => {
+            if (ent.name === "player") {
+                // Initialize player position
+                camera.position.set(ent.position[0], ent.position[1], ent.position[2]);
+                
+                // Process player children (hand, flashlight) and attach them directly to the camera!
+                if (ent.children) {
+                    ent.children.forEach(childData => {
+                        const childGroup = createEntity(childData);
+                        
+                        // Positioning hand and flash to fit camera first-person view
+                        if (childData.name === "hand") {
+                            childGroup.position.set(0.4, -0.4, -0.8);
+                        } else if (childData.name === "flash") {
+                            childGroup.position.set(0, 0, 0);
+                        }
+                        camera.add(childGroup);
+                    });
+                }
+                scene.add(camera);
+                return;
+            }
+
+            let entGroup = createEntity(ent);
+            scene.add(entGroup);
+
+            // Handle static collision items - EXCLUDE "house" so player doesn't get stuck inside the house bounds!
+            const collisionExclusions = ["player", "hand", "collided", "granny", "spider", "house"];
+            const isExcluded = collisionExclusions.includes(ent.name) || ent.name.startsWith("key") || ent.name === "screw" || ent.name === "hummer" || ent.name === "masterKey";
+
+            if (!isExcluded) {
+                entGroup.updateMatrixWorld(true);
+                const box = new THREE.Box3().setFromObject(entGroup);
+                if (!box.isEmpty()) {
+                    colliders.push({
+                        name: ent.name,
+                        box: box,
+                        group: entGroup
+                    });
+                }
+            }
+
+            // Setup interactive entities
+            const interactiveItems = [
+                "key1", "key2", "key3", "key4", "key5", "key6",
+                "screw", "hummer", "masterKey",
+                "door1", "door2", "door3", "door4", "door5", "door6", "masterdoor",
+                "drawer"
+            ];
+            if (interactiveItems.includes(ent.name) || ent.name.startsWith("door") || ent.name.startsWith("key")) {
+                interactiveEntities.push({
+                    name: ent.name,
+                    group: entGroup,
+                    unlocked: false,
+                    pickedUp: false
+                });
+            }
+
+            // Track Granny
+            if (ent.name === "granny") {
+                grannyMesh = entGroup;
+            }
+        });
+
+        // Adjust textures repeat settings for specific walls
+        scene.traverse(child => {
+            if (child.isMesh && child.material && child.material.map) {
+                child.material.map.repeat.set(1, 1);
+                child.material.map.needsUpdate = true;
+            }
+        });
+    }
+
+    function checkInteractions() {
             // We use a raycaster from the camera forward direction
             const raycaster = new THREE.Raycaster();
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
@@ -1292,8 +1317,8 @@ POSITIONING: Türkiye'nin En Genç Teknoloji Şirketi
             if (keysPressed['s']) moveVec.z += 1;
             if (keysPressed['a']) moveVec.x -= 1;
             if (keysPressed['d']) moveVec.x += 1;
-            if (keysPressed['q']) moveVec.y += 1; // fly up
-            if (keysPressed['e']) moveVec.y -= 1; // fly down
+            if (keysPressed['q'] || keysPressed[' ']) moveVec.y += 1; // Q veya Space ile yukarı uç
+            if (keysPressed['c'] || keysPressed['control']) moveVec.y -= 1; // C veya Control ile aşağı uç
 
             moveVec.normalize();
 
