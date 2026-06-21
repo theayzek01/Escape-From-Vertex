@@ -308,6 +308,31 @@
             z-index: 1;
         }
 
+        @media (max-width: 1024px) {
+            .screen {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100% !important;
+                height: 40% !important;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+                padding: 20px;
+            }
+            .main-panel {
+                width: 100% !important;
+                height: 60% !important;
+                padding: 20px;
+            }
+            .btn-group {
+                width: 100%;
+                max-width: 320px;
+            }
+            .title {
+                font-size: 32px;
+            }
+        }
+
         /* Hit / Damage indicator overlay */
         #damage-flash {
             position: absolute;
@@ -690,6 +715,7 @@ POSITIONING: Türkiye'nin En Genç Teknoloji Şirketi
                 }
 
                 addLog("[SYSTEM] Tüm kaynaklar başarıyla yüklendi!");
+                buildWorld(); // Build the 3D scene from the loaded config
                 setTimeout(() => {
                     document.getElementById('screen-loading').classList.add('hidden');
                     document.getElementById('screen-menu').classList.remove('hidden');
@@ -756,8 +782,8 @@ POSITIONING: Türkiye'nin En Genç Teknoloji Şirketi
                 }
             });
 
-            // Build the World from JSON config
-            buildWorld();
+            // Build the World from JSON config (Deferred to loadGame completion)
+            // buildWorld();
         }
 
         // Helper to construct materials from config
@@ -1101,6 +1127,20 @@ POSITIONING: Türkiye'nin En Genç Teknoloji Şirketi
                 instructions.classList.remove('hidden');
                 stopAllSounds();
                 playSound('scaryMusic', true);
+                
+                // Request Fullscreen to make it truly full screen (tam ekran)
+                try {
+                    const de = document.documentElement;
+                    if (de.requestFullscreen) {
+                        de.requestFullscreen();
+                    } else if (de.webkitRequestFullscreen) { /* Safari */
+                        de.webkitRequestFullscreen();
+                    } else if (de.msRequestFullscreen) { /* IE11 */
+                        de.msRequestFullscreen();
+                    }
+                } catch (e) {
+                    console.log("Fullscreen request failed:", e);
+                }
             });
 
             instructions.addEventListener('click', () => {
