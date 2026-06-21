@@ -1,1193 +1,19141 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VERTEX'den Kaçış</title>
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet">
-    <style>
-        /* Design System Context: Premium Dark SaaS - shadcn/ui / Vercel / Linear */
-        :root {
-            --bg: oklch(12% 0.006 260);
-            --surface: oklch(17% 0.008 260);
-            --fg: oklch(96% 0.004 260);
-            --muted: oklch(66% 0.01 260);
-            --border: oklch(27% 0.008 260);
-            --accent: oklch(68% 0.14 245); /* Emerald / Cyan accent */
-            --danger: oklch(62% 0.18 20);
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Fira Code', 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, monospace;
-        }
-
-        body, html {
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: var(--bg);
-            color: var(--fg);
-        }
-
-        /* Scaled Aspect Containers for 100% 1:1 Pixel Mapping with C++ textures */
-        .aspect-container {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 1920px;
-            height: 1080px;
-            transform-origin: center center;
-            transform: translate(-50%, -50%) scale(1);
-            background-size: 100% 100%;
-            background-repeat: no-repeat;
-            background-position: center;
-            z-index: 10;
-            transition: opacity 0.5s ease;
-            overflow: hidden;
-        }
-
-        .aspect-container.hidden {
-            opacity: 0;
-            pointer-events: none;
-            z-index: -1;
-        }
-
-        /* Menu UI buttons mapped to exact C++ coordinates */
-        .menu-btn {
-            position: absolute;
-            background-color: rgba(30, 37, 48, 0.4);
-            border: 1px solid transparent;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            border-radius: 4px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 18px;
-            font-weight: 500;
-            color: transparent; /* Text is painted on image, but hover will show it if needed or just show glow */
-        }
-
-        .menu-btn:hover {
-            background-color: rgba(52, 211, 153, 0.15);
-            border-color: var(--accent);
-            box-shadow: 0 0 15px rgba(52, 211, 153, 0.3);
-        }
-
-        .menu-btn.btn-danger:hover {
-            background-color: rgba(239, 68, 68, 0.15);
-            border-color: var(--danger);
-            box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
-        }
-
-        /* Loading Progress inside loading screen */
-        .loading-progress-panel {
-            position: absolute;
-            left: 955px;
-            top: 570px;
-            width: 400px;
-            transform: translateX(-100px); /* Center aligning with button columns */
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .progress-container {
-            width: 100%;
-            background-color: rgba(15, 20, 28, 0.8);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            height: 20px;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .progress-bar {
-            height: 100%;
-            background-color: var(--accent);
-            width: 0%;
-            transition: width 0.1s ease;
-        }
-
-        .progress-text {
-            font-size: 13px;
-            color: var(--muted);
-            margin-top: 8px;
-            text-align: center;
-        }
-
-        /* In-game HUD overlay */
-        #hud {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 5;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 30px;
-        }
-
-        .hud-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-        }
-
-        .hud-card {
-            background-color: rgba(15, 20, 28, 0.85);
-            border: 1px solid var(--border);
-            padding: 15px 25px;
-            border-radius: 8px;
-            font-size: 16px;
-            color: var(--fg);
-            pointer-events: auto;
-            backdrop-filter: blur(8px);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
-        }
-
-        .hud-card-title {
-            font-size: 12px;
-            color: var(--muted);
-            text-transform: uppercase;
-            margin-bottom: 5px;
-            letter-spacing: 1px;
-        }
-
-        .hud-card-value {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--accent);
-        }
-
-        .hud-card-value.danger {
-            color: var(--danger);
-        }
-
-        /* Centered crosshair and interaction prompt */
-        .hud-center {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .crosshair {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background-color: var(--fg);
-            opacity: 0.6;
-            transition: all 0.1s ease;
-        }
-
-        .crosshair.active {
-            transform: scale(1.5);
-            background-color: var(--accent);
-            opacity: 1;
-        }
-
-        .interaction-prompt {
-            margin-top: 20px;
-            background-color: rgba(15, 20, 28, 0.85);
-            border: 1px solid var(--accent);
-            padding: 10px 20px;
-            border-radius: 6px;
-            font-size: 14px;
-            color: var(--accent);
-            opacity: 0;
-            transition: opacity 0.2s ease;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .interaction-prompt.visible {
-            opacity: 1;
-        }
-
-        /* Top centered message box */
-        .hud-msg-box {
-            position: absolute;
-            top: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(15, 20, 28, 0.9);
-            border: 1px solid var(--border);
-            padding: 12px 30px;
-            border-radius: 8px;
-            font-size: 18px;
-            font-weight: 500;
-            color: var(--fg);
-            max-width: 600px;
-            text-align: center;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(8px);
-        }
-
-        /* WebGL container */
-        #container3d {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 1;
-        }
-
-        /* Hit / Damage indicator overlay */
-        #damage-flash {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(239, 68, 68, 0.4);
-            z-index: 8;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.1s ease;
-        }
-
-        /* Instruction screen for mouse lock */
-        #instructions {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(10, 14, 20, 0.85);
-            z-index: 9;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            cursor: pointer;
-        }
-
-        #instructions.hidden {
-            display: none;
-        }
-
-        .instruction-btn {
-            background-color: var(--surface);
-            color: var(--fg);
-            border: 1px solid var(--border);
-            padding: 16px 36px;
-            font-size: 18px;
-            font-weight: 500;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-top: 25px;
-        }
-
-        .instruction-btn:hover {
-            border-color: var(--accent);
-            color: var(--accent);
-            background-color: rgba(52, 211, 153, 0.05);
-        }
-    </style>
-</head>
-<body>
-
-    <!-- 3D Graphics Canvas Container -->
-    <div id="container3d"></div>
-
-    <!-- Hit Effect Flash Overlay -->
-    <div id="damage-flash"></div>
-
-    <!-- 1. LOADING SCREEN -->
-    <div id="screen-loading" class="aspect-container" style="background-image: url('assets/textures/granny.jpg');">
-        <!-- Render a dark blocker over the buttons area to place progress bar -->
-        <div class="loading-progress-panel">
-            <div class="progress-container">
-                <div class="progress-bar" id="load-progress"></div>
-            </div>
-            <div class="progress-text" id="load-status">VERTEX Yükleyici: Başlatılıyor... (%0)</div>
-        </div>
-    </div>
-
-    <!-- 2. MAIN MENU SCREEN -->
-    <div id="screen-menu" class="aspect-container hidden" style="background-image: url('assets/textures/granny.jpg');">
-        <!-- Play Button: Mapped to C++ coordinates 955, 570, 200, 40 -->
-        <button class="menu-btn" id="btn-start" style="left: 955px; top: 570px; width: 200px; height: 40px;"></button>
-        <!-- Exit Button: Mapped to C++ coordinates 955, 644, 200, 40 -->
-        <button class="menu-btn" id="btn-help-trigger" style="left: 955px; top: 644px; width: 200px; height: 40px;"></button>
-    </div>
-
-    <!-- 3. GAMEPLAY INSTRUCTIONS / CLICK TO LOCK MOUSE -->
-    <div id="instructions" class="hidden">
-        <div style="font-size: 40px; font-weight: 700; color: var(--accent); margin-bottom: 20px;">SİSTEME ODAKLAN</div>
-        <div style="font-size: 18px; color: var(--muted); max-width: 600px; line-height: 1.8; text-align: center;">
-            Mouse'u kilitlemek ve oyuna odaklanmak için ekrana tıklayın.<br><br>
-            <strong style="color: var(--accent);">HAREKET:</strong> W, A, S, D tuşları (Uçuş Modu)<br>
-            <strong style="color: var(--accent);">YUKARI / AŞAĞI UÇMA:</strong> Space (Boşluk) / C tuşları<br>
-            <strong style="color: var(--accent);">ETKİLEŞİM / EŞYA ALMA:</strong> Sol Tık veya E tuşu<br>
-            <strong style="color: var(--accent);">GERİ DÖN / ÇIKIŞ:</strong> ESC tuşu
-        </div>
-        <button class="instruction-btn">BAĞLAN</button>
-    </div>
-
-    <!-- 4. IN-GAME HUD -->
-    <div id="hud" style="display: none;">
-        <div class="hud-msg-box" id="hud-message">Yalnız olduğunu sanıyordun. Yanılıyordun. Vertex seni izliyor!</div>
-        
-        <div class="hud-top">
-            <div class="hud-card">
-                <div class="hud-card-title">YAŞAM</div>
-                <div class="hud-card-value danger" id="hud-lives">Can: ❤️❤️❤️</div>
-            </div>
-            <div class="hud-card">
-                <div class="hud-card-title">ENVANTER</div>
-                <div class="hud-card-value" id="hud-inventory">Boş</div>
-            </div>
-        </div>
-
-        <div class="hud-center">
-            <div class="crosshair" id="crosshair"></div>
-            <div class="interaction-prompt" id="interact-prompt">Almak için Tıkla (E)</div>
-        </div>
-    </div>
-
-    <!-- 5. GAME LOSE SCREEN -->
-    <div id="screen-lose" class="aspect-container hidden" style="background-image: url('assets/textures/end.jpg');">
-        <!-- Restart Button: Mapped to C++ coordinates 830, 607, 400, 33 -->
-        <button class="menu-btn" id="btn-restart-lose" style="left: 830px; top: 607px; width: 400px; height: 33px;"></button>
-        <!-- Menu Button: Mapped to C++ coordinates 830, 644, 400, 33 -->
-        <button class="menu-btn btn-danger" id="btn-menu-lose" style="left: 830px; top: 644px; width: 400px; height: 33px;"></button>
-    </div>
-
-    <!-- 6. GAME WIN SCREEN -->
-    <div id="screen-win" class="aspect-container hidden" style="background-image: url('assets/textures/win.jpg');">
-        <!-- Restart Button: Mapped to C++ coordinates 830, 607, 400, 33 -->
-        <button class="menu-btn" id="btn-restart-win" style="left: 830px; top: 607px; width: 400px; height: 33px;"></button>
-        <!-- Menu Button: Mapped to C++ coordinates 830, 644, 400, 33 -->
-        <button class="menu-btn" id="btn-menu-win" style="left: 830px; top: 644px; width: 400px; height: 33px;"></button>
-    </div>
-
-    <!-- Three.js Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
-
-    <!-- Game Javascript -->
-    <script>
-        // Strip comments and parse JSONC
-        function parseJSONC(text) {
-            let clean = text.replace(/\/\*[\s\S]*?\*\//g, "");
-            clean = clean.replace(/(^|[^:])\/\/.*$/gm, "$1");
-            clean = clean.replace(/,(\s*[}\]])/g, "$1");
-            return JSON.parse(clean);
-        }
-
-        // Global UI Scaling helper to keep buttons aligned under all window sizes
-        function scaleUI() {
-            const containers = document.querySelectorAll('.aspect-container');
-            const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
-            containers.forEach(c => {
-                c.style.transform = `translate(-50%, -50%) scale(${scale})`;
-            });
-        }
-        window.addEventListener('resize', scaleUI);
-
-        // Global Game State
-        const state = {
-            config: null,
-            textures: {},
-            meshes: {},
-            sounds: {},
-            lives: 3,
-            inventory: [],
-            isGameRunning: false,
-            playerStartPos: new THREE.Vector3(55, 8, 18),
-            grannyStartPos: new THREE.Vector3(50, 5.7, 23),
-            messageDuration: 5000,
-            messageTimer: 0,
-            activeMessage: ""
-        };
-
-        // UI Helpers
-        function showHUDMessage(text) {
-            document.getElementById('hud-message').innerText = text;
-            state.activeMessage = text;
-            state.messageTimer = Date.now() + state.messageDuration;
-        }
-
-        function updateHUD() {
-            let heartStr = "Can: ";
-            for (let i = 0; i < state.lives; i++) heartStr += "❤️";
-            document.getElementById('hud-lives').innerText = heartStr;
-            
-            const invStr = state.inventory.length > 0 ? state.inventory.map(item => `[ ${item.toUpperCase()} ]`).join(", ") : "Boş";
-            document.getElementById('hud-inventory').innerText = invStr;
-        }
-
-        // Sound System Wrapper
-        function initSoundSystem() {
-            const audioFiles = {
-                menu: 'assets/audio/menu.mp3',
-                win: 'assets/audio/secret.mp3',
-                spotted: 'assets/audio/14. Spotted.mp3',
-                scream: 'assets/audio/scream.mp3',
-                scaryMusic: 'assets/audio/granny_house_music.mp3',
-                doorOpen: 'assets/audio/openDoor.mp3',
-                pickup: 'assets/audio/walking-on-a-wooden-floor-14743.mp3'
-            };
-            
-            for (let key in audioFiles) {
-                state.sounds[key] = new Audio(audioFiles[key]);
-            }
-        }
-
-        function playSound(key, loop = false) {
-            if (state.sounds[key]) {
-                try {
-                    state.sounds[key].loop = loop;
-                    state.sounds[key].currentTime = 0;
-                    state.sounds[key].play().catch(e => console.log("Audio play deferred: press start."));
-                } catch(e) {
-                    console.log("Audio play error:", e);
-                }
-            }
-        }
-
-        function stopSound(key) {
-            if (state.sounds[key]) {
-                try {
-                    state.sounds[key].pause();
-                } catch(e) {}
-            }
-        }
-
-        function stopAllSounds() {
-            for (let key in state.sounds) {
-                stopSound(key);
-            }
-        }
-
-        // Load game assets
-        async function loadGame() {
-            try {
-                const response = await fetch('config/granny.jsonc');
-                if (!response.ok) throw new Error("granny.jsonc bulunamadı.");
-                const rawText = await response.text();
-                state.config = parseJSONC(rawText);
-
-                // Initialize Sound System
-                initSoundSystem();
-
-                // Setup asset loaders
-                const textureLoader = new THREE.TextureLoader();
-                const objLoader = new THREE.OBJLoader();
-
-                const textureList = state.config.scene.assets.textures;
-                const meshList = state.config.scene.assets.meshes;
-
-                const totalAssets = Object.keys(textureList).length + Object.keys(meshList).length;
-                let loadedCount = 0;
-
-                function updateProgress() {
-                    loadedCount++;
-                    const pct = Math.floor((loadedCount / totalAssets) * 100);
-                    document.getElementById('load-progress').style.width = pct + '%';
-                    document.getElementById('load-status').innerText = `Gerekli kaynaklar indiriliyor (%${pct}) - ${loadedCount}/${totalAssets}`;
-                }
-
-                // Load Textures
-                for (let key in textureList) {
-                    const url = textureList[key];
-                    state.textures[key] = await new Promise((resolve) => {
-                        textureLoader.load(url, 
-                            (tex) => {
-                                tex.wrapS = THREE.RepeatWrapping;
-                                tex.wrapT = THREE.RepeatWrapping;
-                                updateProgress();
-                                resolve(tex);
-                            },
-                            undefined,
-                            () => {
-                                updateProgress();
-                                resolve(null);
-                            }
-                        );
-                    });
-                }
-
-                // Load Meshes (OBJ files)
-                for (let key in meshList) {
-                    const url = meshList[key];
-                    state.meshes[key] = await new Promise((resolve) => {
-                        objLoader.load(url, 
-                            (obj) => {
-                                updateProgress();
-                                resolve(obj);
-                            },
-                            undefined,
-                            (err) => {
-                                updateProgress();
-                                resolve(new THREE.Group());
-                            }
-                        );
-                    });
-                }
-
-                buildWorld(); // Build 3D scene from JSON config
-                setTimeout(() => {
-                    document.getElementById('screen-loading').classList.add('hidden');
-                    document.getElementById('screen-menu').classList.remove('hidden');
-                    playSound('menu', true);
-                }, 1000);
-
-            } catch (err) {
-                console.error("Yükleme Hatası:", err);
-                document.getElementById('load-status').innerText = `Yükleme Hatası: ${err.message}`;
-            }
-        }
-
-        // Initialize 3D Scene and Gameplay Loop
-        let scene, camera, renderer, controls;
-        let keysPressed = {};
-        const velocity = new THREE.Vector3();
-        const direction = new THREE.Vector3();
-        const colliders = []; // Static colliders with bounding boxes
-        const interactiveEntities = []; // Interactive items (keys, doors, etc.)
-        let grannyMesh = null;
-        let lastTime = performance.now();
-        let grannyTimer = 0;
-        let hitFlashTimer = 0;
-
-        function init3D() {
-            const container = document.getElementById('container3d');
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0a0d14);
-            scene.fog = new THREE.FogExp2(0x0a0d14, 0.05);
-
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true;
-            container.appendChild(renderer.domElement);
-
-            controls = new THREE.PointerLockControls(camera, document.body);
-
-            // Handle resize
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
-
-            // Keyboard listeners
-            window.addEventListener('keydown', (e) => {
-                keysPressed[e.key.toLowerCase()] = true;
-                
-                // Interaction on 'E'
-                if (e.key.toLowerCase() === 'e') {
-                    checkInteractions();
-                }
-            });
-            window.addEventListener('keyup', (e) => {
-                keysPressed[e.key.toLowerCase()] = false;
-            });
-
-            // Interaction on Left Click
-            window.addEventListener('click', () => {
-                if (controls.isLocked) {
-                    checkInteractions();
-                }
-            });
-        }
-
-        // Helper to construct materials from config
-        function getMaterial(matKey) {
-            const mats = state.config.scene.assets.materials;
-            if (!mats || !mats[matKey]) {
-                return new THREE.MeshPhongMaterial({ color: 0xcccccc });
-            }
-            const matConfig = mats[matKey];
-            
-            // If it's a textured material
-            if (matConfig.diffuse && state.textures[matConfig.diffuse]) {
-                const tex = state.textures[matConfig.diffuse];
-                
-                const mat = new THREE.MeshPhongMaterial({
-                    map: tex,
-                    color: matConfig.tint ? new THREE.Color(matConfig.tint[0], matConfig.tint[1], matConfig.tint[2]) : 0xffffff,
-                    side: THREE.DoubleSide
-                });
-                
-                // Apply transparency if needed (e.g. wall or glass)
-                if (matKey === "house" || matKey === "wall") {
-                    mat.transparent = true;
-                    mat.opacity = 0.65;
-                }
-                
-                return mat;
-            }
-
-            // Fallback solid color
-            return new THREE.MeshPhongMaterial({
-                color: matConfig.tint ? new THREE.Color(matConfig.tint[0], matConfig.tint[1], matConfig.tint[2]) : 0xcccccc
-            });
-        }
-
-        function createEntity(entData) {
-            let entGroup = new THREE.Group();
-            entGroup.name = entData.name;
-
-            // Position, rotation, scale
-            if (entData.position) entGroup.position.set(entData.position[0], entData.position[1], entData.position[2]);
-            if (entData.rotation) {
-                entGroup.rotation.set(
-                    THREE.MathUtils.degToRad(entData.rotation[0]),
-                    THREE.MathUtils.degToRad(entData.rotation[1]),
-                    THREE.MathUtils.degToRad(entData.rotation[2])
-                );
-            }
-            if (entData.scale) entGroup.scale.set(entData.scale[0], entData.scale[1], entData.scale[2]);
-
-            // Parse components
-            if (entData.components) {
-                entData.components.forEach(comp => {
-                    if (comp.type === "Mesh Renderer") {
-                        const meshObj = state.meshes[comp.mesh];
-                        if (meshObj) {
-                            const clonedMesh = meshObj.clone();
-                            const material = getMaterial(comp.material);
-                            clonedMesh.traverse(child => {
-                                if (child.isMesh) {
-                                    child.material = material;
-                                    child.castShadow = true;
-                                    child.receiveShadow = true;
-                                }
-                            });
-                            entGroup.add(clonedMesh);
-                        }
-                    }
-                    
-                    if (comp.type === "Spot Light") {
-                        const color = comp.color ? new THREE.Color(comp.color[0], comp.color[1], comp.color[2]) : 0xffffff;
-                        const light = new THREE.SpotLight(color, 25.0, 100, THREE.MathUtils.degToRad(45), 0.5, 1.0);
-                        light.castShadow = true;
-                        
-                        const targetObj = new THREE.Object3D();
-                        targetObj.position.set(0, 0, -10); // Point forward
-                        entGroup.add(targetObj);
-                        light.target = targetObj;
-                        
-                        entGroup.add(light);
-                    }
-
-                    if (comp.type === "Point Light") {
-                        const color = comp.color ? new THREE.Color(comp.color[0], comp.color[1], comp.color[2]) : 0xffffff;
-                        const light = new THREE.PointLight(color, 12.0, 40, 1.0);
-                        light.castShadow = true;
-                        entGroup.add(light);
-                    }
-                });
-            }
-
-            // Process children recursively
-            if (entData.children) {
-                entData.children.forEach(childData => {
-                    const childGroup = createEntity(childData);
-                    entGroup.add(childGroup);
-                });
-            }
-
-            return entGroup;
-        }
-
-        function buildWorld() {
-            const entities = state.config.scene.world;
-
-            // Default ambient light (enhanced so the environment is slightly visible even without flashlight)
-            const ambientLight = new THREE.AmbientLight(0x444444);
-            scene.add(ambientLight);
-
-            entities.forEach(ent => {
-                if (ent.name === "player") {
-                    // Initialize player position
-                    camera.position.set(ent.position[0], ent.position[1], ent.position[2]);
-                    
-                    // Process player children (hand, flashlight) and attach them directly to the camera!
-                    if (ent.children) {
-                        ent.children.forEach(childData => {
-                            const childGroup = createEntity(childData);
-                            
-                            // Positioning hand and flash to fit camera first-person view
-                            if (childData.name === "hand") {
-                                childGroup.position.set(0.4, -0.4, -0.8);
-                            } else if (childData.name === "flash") {
-                                childGroup.position.set(0, 0, 0);
-                            }
-                            camera.add(childGroup);
-                        });
-                    }
-                    scene.add(camera);
-                    return;
-                }
-
-                let entGroup = createEntity(ent);
-                scene.add(entGroup);
-
-                // Handle static collision items - EXCLUDE "house" so player doesn't get stuck inside the house bounds!
-                const collisionExclusions = ["player", "hand", "collided", "granny", "spider", "house"];
-                const isExcluded = collisionExclusions.includes(ent.name) || ent.name.startsWith("key") || ent.name === "screw" || ent.name === "hummer" || ent.name === "masterKey";
-
-                if (!isExcluded) {
-                    entGroup.updateMatrixWorld(true);
-                    const box = new THREE.Box3().setFromObject(entGroup);
-                    if (!box.isEmpty()) {
-                        colliders.push({
-                            name: ent.name,
-                            box: box,
-                            group: entGroup
-                        });
-                    }
-                }
-
-                // Setup interactive entities
-                const interactiveItems = [
-                    "key1", "key2", "key3", "key4", "key5", "key6",
-                    "screw", "hummer", "masterKey",
-                    "door1", "door2", "door3", "door4", "door5", "door6", "masterdoor",
-                    "drawer"
-                ];
-                if (interactiveItems.includes(ent.name) || ent.name.startsWith("door") || ent.name.startsWith("key")) {
-                    interactiveEntities.push({
-                        name: ent.name,
-                        group: entGroup,
-                        unlocked: false,
-                        pickedUp: false
-                    });
-                }
-
-                // Track Granny
-                if (ent.name === "granny") {
-                    grannyMesh = entGroup;
-                }
-            });
-
-            // Adjust textures repeat settings for specific walls
-            scene.traverse(child => {
-                if (child.isMesh && child.material && child.material.map) {
-                    child.material.map.repeat.set(1, 1);
-                    child.material.map.needsUpdate = true;
-                }
-            });
-        }
-
-        // Gameplay check interaction
-        function checkInteractions() {
-            const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-
-            // Find closest interactive entity within 4.0 meters
-            let closest = null;
-            let minDist = 4.0;
-
-            interactiveEntities.forEach(ent => {
-                if (ent.pickedUp || ent.unlocked) return;
-
-                const dist = camera.position.distanceTo(ent.group.position);
-                if (dist < minDist) {
-                    closest = ent;
-                    minDist = dist;
-                }
-            });
-
-            if (closest) {
-                interactWith(closest);
-            }
-        }
-
-        function interactWith(item) {
-            const name = item.name;
-
-            // 1. Picking up items
-            if (name.startsWith("key") && name !== "masterdoor") {
-                item.pickedUp = true;
-                item.group.visible = false;
-                state.inventory.push(name);
-                playSound('pickup');
-                updateHUD();
-                
-                if (name === "key1") showHUDMessage("Gerekli kapiyi ara.");
-                else showHUDMessage(`${name.toUpperCase()} bulundu!`);
-                
-            } else if (name === "screw") {
-                item.pickedUp = true;
-                item.group.visible = false;
-                state.inventory.push("screw");
-                playSound('pickup');
-                updateHUD();
-                showHUDMessage("Bu tornavida kapilari acmak icin yararli olabilir.");
-
-            } else if (name === "hummer") {
-                item.pickedUp = true;
-                item.group.visible = false;
-                state.inventory.push("hummer");
-                playSound('pickup');
-                updateHUD();
-                showHUDMessage("Çekiç alındı. Bunu çekmeceyi kırmak için kullanabilirsin.");
-
-            } else if (name === "masterKey") {
-                item.pickedUp = true;
-                item.group.visible = false;
-                state.inventory.push("masterKey");
-                playSound('pickup');
-                updateHUD();
-                showHUDMessage("Master Anahtar alındı! Çıkış kapısını açabilirsin!");
-
-            } else if (name === "drawer") {
-                if (state.inventory.includes("hummer")) {
-                    item.unlocked = true;
-                    item.group.visible = false;
-                    showHUDMessage("Çekmece çekiçle kırıldı! İçindeki Anahtar 1 açığa çıktı.");
-                    playSound('doorOpen');
-                    const key1 = interactiveEntities.find(e => e.name === "key1");
-                    if (key1) {
-                        key1.group.position.copy(item.group.position);
-                    }
-                } else {
-                    showHUDMessage("Bunu acmak icin agir bir alete (cekic) ihtiyacin olabilir.");
-                }
-
-            } else if (name.startsWith("door") || name === "masterdoor") {
-                let requiredKey = "";
-                let doorLabel = "";
-                if (name === "door1") { requiredKey = "key1"; doorLabel = "Oturma Odası"; }
-                else if (name === "door2") { requiredKey = "key2"; doorLabel = "Yatak Odası"; }
-                else if (name === "door3") { requiredKey = "key3"; doorLabel = "İkinci Kat"; }
-                else if (name === "door4") { requiredKey = "key4"; doorLabel = "Özel Oda"; }
-                else if (name === "door5") { requiredKey = "key5"; doorLabel = "TV Odası"; }
-                else if (name === "door6") { requiredKey = "key6"; doorLabel = "Gizli Bölme"; }
-                else if (name === "masterdoor") { requiredKey = "masterKey"; doorLabel = "Dış Çıkış"; }
-
-                if (state.inventory.includes(requiredKey)) {
-                    item.unlocked = true;
-                    playSound('doorOpen');
-                    item.group.rotation.y += Math.PI / 2;
-                    
-                    const colIdx = colliders.findIndex(c => c.name === name);
-                    if (colIdx !== -1) colliders.splice(colIdx, 1);
-
-                    const invIdx = state.inventory.indexOf(requiredKey);
-                    state.inventory.splice(invIdx, 1);
-                    updateHUD();
-
-                    if (name === "masterdoor") {
-                        showHUDMessage("TEBRİKLER! VERTEX'TEN KAÇMAYI BAŞARDINIZ!");
-                        setTimeout(winGame, 1500);
-                    } else {
-                        showHUDMessage(`${doorLabel} Kapısı Açıldı.`);
-                    }
-                } else {
-                    if (name === "door1") showHUDMessage("Oturma odasina bak");
-                    else if (name === "door2") showHUDMessage("Yatak odasina bak");
-                    else if (name === "door3") showHUDMessage("Ikinci kata bak");
-                    else if (name === "door4") showHUDMessage("Tak tak. Kim o! Vertex mi?");
-                    else if (name === "door5") showHUDMessage("Televizyonun etrafini ara");
-                    else if (name === "door6") showHUDMessage("Anahtar evin icinde bir yerlerde gizlenmis olabilir.");
-                    else if (name === "masterdoor") showHUDMessage("Acele et, arkanda! Vertex seni izliyor! Çıkış için Master Anahtar lazım!");
-                }
-            }
-        }
-
-        // Damage trigger
-        function hitPlayer() {
-            state.lives--;
-            updateHUD();
-            
-            const flash = document.getElementById('damage-flash');
-            flash.style.opacity = '1';
-            setTimeout(() => { flash.style.opacity = '0'; }, 300);
-
-            playSound('scream');
-            
-            if (state.lives <= 0) {
-                loseGame();
-            } else {
-                showHUDMessage(`YAKALANDINIZ! Canlar eksiliyor! Yeniden başlanıyor...`);
-                camera.position.copy(state.playerStartPos);
-                if (grannyMesh) {
-                    grannyMesh.position.copy(state.grannyStartPos);
-                }
-            }
-        }
-
-        // End states
-        function loseGame() {
-            state.isGameRunning = false;
-            controls.unlock();
-            stopAllSounds();
-            document.getElementById('hud').style.display = 'none';
-            document.getElementById('screen-lose').classList.remove('hidden');
-        }
-
-        function winGame() {
-            state.isGameRunning = false;
-            controls.unlock();
-            stopAllSounds();
-            playSound('win');
-            document.getElementById('hud').style.display = 'none';
-            document.getElementById('screen-win').classList.remove('hidden');
-        }
-
-        // Setup pointer lock & UI clicks
-        function setupPointerLock() {
-            const instructions = document.getElementById('instructions');
-            
-            document.getElementById('btn-start').addEventListener('click', () => {
-                document.getElementById('screen-menu').classList.add('hidden');
-                instructions.classList.remove('hidden');
-                stopAllSounds();
-                playSound('scaryMusic', true);
-                
-                // Request Fullscreen
-                try {
-                    const de = document.documentElement;
-                    if (de.requestFullscreen) {
-                        de.requestFullscreen();
-                    } else if (de.webkitRequestFullscreen) {
-                        de.webkitRequestFullscreen();
-                    } else if (de.msRequestFullscreen) {
-                        de.msRequestFullscreen();
-                    }
-                } catch (e) {
-                    console.log("Fullscreen request failed:", e);
-                }
-            });
-
-            instructions.addEventListener('click', () => {
-                controls.lock();
-            });
-
-            controls.addEventListener('lock', () => {
-                instructions.classList.add('hidden');
-                document.getElementById('hud').style.display = 'flex';
-                state.isGameRunning = true;
-                lastTime = performance.now();
-                updateHUD();
-            });
-
-            controls.addEventListener('unlock', () => {
-                if (state.isGameRunning) {
-                    instructions.classList.remove('hidden');
-                    document.getElementById('hud').style.display = 'none';
-                }
-            });
-
-            document.getElementById('btn-help-trigger').addEventListener('click', () => {
-                alert("Oyun Kontrolleri:\n\nHareket: WASD tuşları\nYön: Mouse hareketi\nEtkileşim (Kapı Açma / Eşya Alma): Sol Tık veya E tuşu\nÇıkış: ESC tuşu");
-            });
-
-            const resetState = () => {
-                state.lives = 3;
-                state.inventory = [];
-                camera.position.copy(state.playerStartPos);
-                if (grannyMesh) grannyMesh.position.copy(state.grannyStartPos);
-                
-                interactiveEntities.forEach(ent => {
-                    ent.pickedUp = false;
-                    ent.unlocked = false;
-                    ent.group.visible = true;
-                });
-            };
-
-            // Bind Lose buttons (scaled coordinate regions in overlay)
-            document.getElementById('btn-restart-lose').addEventListener('click', () => {
-                resetState();
-                document.getElementById('screen-lose').classList.add('hidden');
-                instructions.classList.remove('hidden');
-                playSound('scaryMusic', true);
-            });
-
-            document.getElementById('btn-menu-lose').addEventListener('click', () => {
-                resetState();
-                document.getElementById('screen-lose').classList.add('hidden');
-                document.getElementById('screen-menu').classList.remove('hidden');
-                playSound('menu', true);
-            });
-
-            // Bind Win buttons
-            document.getElementById('btn-restart-win').addEventListener('click', () => {
-                resetState();
-                document.getElementById('screen-win').classList.add('hidden');
-                instructions.classList.remove('hidden');
-                playSound('scaryMusic', true);
-            });
-
-            document.getElementById('btn-menu-win').addEventListener('click', () => {
-                resetState();
-                document.getElementById('screen-win').classList.add('hidden');
-                document.getElementById('screen-menu').classList.remove('hidden');
-                playSound('menu', true);
-            });
-        }
-
-        // Collision Check Helper
-        function checkCollisions(pos, proposedPos) {
-            const playerBox = new THREE.Box3(
-                new THREE.Vector3(proposedPos.x - 0.6, proposedPos.y - 1.0, proposedPos.z - 0.6),
-                new THREE.Vector3(proposedPos.x + 0.6, proposedPos.y + 1.0, proposedPos.z + 0.6)
-            );
-
-            for (let i = 0; i < colliders.length; i++) {
-                const wall = colliders[i];
-                if (playerBox.intersectsBox(wall.box)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        function updateInteractionPrompt() {
-            let closest = null;
-            let minDist = 3.5;
-
-            interactiveEntities.forEach(ent => {
-                if (ent.pickedUp || ent.unlocked) return;
-                const dist = camera.position.distanceTo(ent.group.position);
-                if (dist < minDist) {
-                    closest = ent;
-                    minDist = dist;
-                }
-            });
-
-            const prompt = document.getElementById('interact-prompt');
-            const crosshair = document.getElementById('crosshair');
-
-            if (closest) {
-                prompt.classList.add('visible');
-                crosshair.classList.add('active');
-                
-                if (closest.name.startsWith("door") || closest.name === "masterdoor") {
-                    prompt.innerText = "Açmak için Tıkla (E)";
-                } else if (closest.name === "drawer") {
-                    prompt.innerText = "Kırmak için Tıkla (E)";
-                } else {
-                    prompt.innerText = "Almak için Tıkla (E)";
-                }
-            } else {
-                prompt.classList.remove('visible');
-                crosshair.classList.remove('active');
-            }
-
-            if (state.activeMessage !== "" && Date.now() > state.messageTimer) {
-                state.activeMessage = "";
-                document.getElementById('hud-message').innerText = "Yalnız olduğunu sanıyordun. Yanılıyordun. Vertex seni izliyor!";
-            }
-        }
-
-        // Gameplay Animation Loop
-        function animate() {
-            requestAnimationFrame(animate);
-
-            if (!state.isGameRunning) return;
-
-            const time = performance.now();
-            const delta = (time - lastTime) / 1000;
-            lastTime = time;
-
-            const speed = 15.0;
-            const moveVec = new THREE.Vector3();
-
-            if (keysPressed['w']) moveVec.z -= 1;
-            if (keysPressed['s']) moveVec.z += 1;
-            if (keysPressed['a']) moveVec.x -= 1;
-            if (keysPressed['d']) moveVec.x += 1;
-            if (keysPressed['q'] || keysPressed[' ']) moveVec.y += 1; // Q or Space to fly up
-            if (keysPressed['c'] || keysPressed['control']) moveVec.y -= 1; // C or Control to fly down
-
-            moveVec.normalize();
-            const currentSpeed = keysPressed['shift'] ? speed * 2.0 : speed;
-
-            const camDir = new THREE.Vector3();
-            camera.getWorldDirection(camDir);
-            
-            const rightVec = new THREE.Vector3();
-            rightVec.crossVectors(camDir, camera.up).normalize();
-
-            const moveDir = new THREE.Vector3();
-            moveDir.addScaledVector(camDir, -moveVec.z);
-            moveDir.addScaledVector(rightVec, moveVec.x);
-            moveDir.y += moveVec.y;
-
-            const proposedPos = camera.position.clone().addScaledVector(moveDir, currentSpeed * delta);
-
-            if (!checkCollisions(camera.position, proposedPos)) {
-                camera.position.copy(proposedPos);
-            }
-
-            if (camera.position.y < 1.0) camera.position.y = 1.0;
-            if (camera.position.y > 15.0) camera.position.y = 15.0;
-
-            // Granny patrol & AI movement logic
-            if (grannyMesh) {
-                grannyTimer += delta;
-                
-                let targetY = 5.7;
-                const patrolCycle = grannyTimer % 60;
-                
-                if (patrolCycle < 20) {
-                    targetY = 9.4; // 2nd Floor
-                } else if (patrolCycle < 40) {
-                    targetY = 5.7; // 1st Floor
-                } else {
-                    targetY = 2.7; // Ground floor
-                }
-
-                grannyMesh.position.y = targetY;
-
-                const toPlayer = new THREE.Vector3().subVectors(camera.position, grannyMesh.position);
-                toPlayer.y = 0;
-                const distToPlayer = toPlayer.length();
-
-                if (distToPlayer < 20.0) {
-                    toPlayer.normalize();
-                    grannyMesh.position.addScaledVector(toPlayer, 3.5 * delta); // Chase speed
-                    grannyMesh.lookAt(new THREE.Vector3(camera.position.x, grannyMesh.position.y, camera.position.z));
-                    
-                    if (distToPlayer < 2.0) {
-                        hitPlayer();
-                    }
-                } else {
-                    const radius = 8.0;
-                    const angle = grannyTimer * 0.5;
-                    grannyMesh.position.x = state.grannyStartPos.x + Math.cos(angle) * radius;
-                    grannyMesh.position.z = state.grannyStartPos.z + Math.sin(angle) * radius;
-                    grannyMesh.rotation.y = angle + Math.PI / 2;
-                }
-            }
-
-            updateInteractionPrompt();
-            renderer.render(scene, camera);
-        }
-
-        // Initialize App on DOM load
-        window.addEventListener('DOMContentLoaded', () => {
-            init3D();
-            setupPointerLock();
-            loadGame();
-            scaleUI();
-            animate();
-        });
-    </script>
-</body>
-</html>
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<html lang="tr">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<head>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <meta charset="UTF-8">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <title>VERTEX'den Kaçış</title>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- Fonts -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <style>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        /* Design System Context: Premium Dark SaaS - shadcn/ui / Vercel / Linear */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        :root {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            --bg: oklch(12% 0.006 260);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            --surface: oklch(17% 0.008 260);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            --fg: oklch(96% 0.004 260);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            --muted: oklch(66% 0.01 260);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            --border: oklch(27% 0.008 260);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            --accent: oklch(68% 0.14 245); /* Emerald / Cyan accent */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            --danger: oklch(62% 0.18 20);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        * {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            box-sizing: border-box;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            margin: 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            padding: 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            font-family: 'Fira Code', 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, monospace;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        body, html {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            width: 100%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            height: 100%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            overflow: hidden;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-color: var(--bg);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            color: var(--fg);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        /* Scaled Aspect Containers for 100% 1:1 Pixel Mapping with C++ textures */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .aspect-container {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            position: absolute;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            top: 50%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            left: 50%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            width: 1920px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            height: 1080px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            transform-origin: center center;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            transform: translate(-50%, -50%) scale(1);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-size: 100% 100%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-repeat: no-repeat;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-position: center;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            z-index: 10;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            transition: opacity 0.5s ease;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            overflow: hidden;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .aspect-container.hidden {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            opacity: 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            pointer-events: none;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            z-index: -1;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        /* Menu UI buttons mapped to exact C++ coordinates */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .menu-btn {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            position: absolute;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-color: rgba(30, 37, 48, 0.4);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border: 1px solid transparent;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            cursor: pointer;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            transition: all 0.15s ease;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border-radius: 4px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            display: flex;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            justify-content: center;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            align-items: center;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            font-size: 18px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            font-weight: 500;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            color: transparent; /* Text is painted on image, but hover will show it if needed or just show glow */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .menu-btn:hover {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-color: rgba(52, 211, 153, 0.15);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border-color: var(--accent);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            box-shadow: 0 0 15px rgba(52, 211, 153, 0.3);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .menu-btn.btn-danger:hover {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-color: rgba(239, 68, 68, 0.15);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border-color: var(--danger);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        /* Loading Progress inside loading screen */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .loading-progress-panel {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            position: absolute;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            left: 955px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            top: 570px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            width: 400px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            transform: translateX(-100px); /* Center aligning with button columns */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            display: flex;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            flex-direction: column;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            align-items: center;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .progress-container {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            width: 100%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-color: rgba(15, 20, 28, 0.8);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border: 1px solid var(--border);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border-radius: 4px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            height: 20px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            overflow: hidden;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            position: relative;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .progress-bar {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            height: 100%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-color: var(--accent);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            width: 0%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            transition: width 0.1s ease;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .progress-text {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            font-size: 13px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            color: var(--muted);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            margin-top: 8px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            text-align: center;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        /* In-game HUD overlay */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        #hud {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            position: absolute;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            top: 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            left: 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            width: 100%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            height: 100%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            pointer-events: none;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            z-index: 5;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            display: flex;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            flex-direction: column;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            justify-content: space-between;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            padding: 30px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .hud-top {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            display: flex;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            justify-content: space-between;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            align-items: flex-start;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .hud-card {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-color: rgba(15, 20, 28, 0.85);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border: 1px solid var(--border);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            padding: 15px 25px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border-radius: 8px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            font-size: 16px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            color: var(--fg);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            pointer-events: auto;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            backdrop-filter: blur(8px);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .hud-card-title {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            font-size: 12px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            color: var(--muted);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            text-transform: uppercase;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            margin-bottom: 5px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            letter-spacing: 1px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .hud-card-value {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            font-size: 20px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            font-weight: 700;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            color: var(--accent);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .hud-card-value.danger {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            color: var(--danger);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        /* Centered crosshair and interaction prompt */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .hud-center {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            position: absolute;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            top: 50%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            left: 50%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            transform: translate(-50%, -50%);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            display: flex;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            flex-direction: column;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            align-items: center;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            justify-content: center;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .crosshair {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            width: 8px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            height: 8px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border-radius: 50%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-color: var(--fg);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            opacity: 0.6;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            transition: all 0.1s ease;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .crosshair.active {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            transform: scale(1.5);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-color: var(--accent);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            opacity: 1;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .interaction-prompt {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            margin-top: 20px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-color: rgba(15, 20, 28, 0.85);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border: 1px solid var(--accent);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            padding: 10px 20px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border-radius: 6px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            font-size: 14px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            color: var(--accent);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            opacity: 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            transition: opacity 0.2s ease;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            text-transform: uppercase;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            letter-spacing: 1px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .interaction-prompt.visible {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            opacity: 1;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        /* Top centered message box */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .hud-msg-box {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            position: absolute;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            top: 30px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            left: 50%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            transform: translateX(-50%);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-color: rgba(15, 20, 28, 0.9);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border: 1px solid var(--border);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            padding: 12px 30px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border-radius: 8px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            font-size: 18px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            font-weight: 500;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            color: var(--fg);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            max-width: 600px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            text-align: center;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            backdrop-filter: blur(8px);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        /* WebGL container */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        #container3d {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            width: 100%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            height: 100%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            position: absolute;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            top: 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            left: 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            z-index: 1;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        /* Hit / Damage indicator overlay */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        #damage-flash {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            position: absolute;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            top: 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            left: 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            width: 100%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            height: 100%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-color: rgba(239, 68, 68, 0.4);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            z-index: 8;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            opacity: 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            pointer-events: none;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            transition: opacity 0.1s ease;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        /* Instruction screen for mouse lock */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        #instructions {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            position: absolute;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            top: 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            left: 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            width: 100%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            height: 100%;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-color: rgba(10, 14, 20, 0.85);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            z-index: 9;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            display: flex;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            flex-direction: column;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            justify-content: center;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            align-items: center;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            text-align: center;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            cursor: pointer;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        #instructions.hidden {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            display: none;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .instruction-btn {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-color: var(--surface);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            color: var(--fg);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border: 1px solid var(--border);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            padding: 16px 36px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            font-size: 18px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            font-weight: 500;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border-radius: 8px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            cursor: pointer;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            transition: all 0.2s ease;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            text-transform: uppercase;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            letter-spacing: 1px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            margin-top: 25px;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        .instruction-btn:hover {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            border-color: var(--accent);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            color: var(--accent);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            background-color: rgba(52, 211, 153, 0.05);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </style>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</head>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<body>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- 3D Graphics Canvas Container -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <div id="container3d"></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- Hit Effect Flash Overlay -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <div id="damage-flash"></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- 1. LOADING SCREEN -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <div id="screen-loading" class="aspect-container" style="background-image: url('assets/textures/granny.jpg');">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <!-- Render a dark blocker over the buttons area to place progress bar -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <div class="loading-progress-panel">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            <div class="progress-container">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                <div class="progress-bar" id="load-progress"></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            <div class="progress-text" id="load-status">VERTEX Yükleyici: Başlatılıyor... (%0)</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- 2. MAIN MENU SCREEN -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <div id="screen-menu" class="aspect-container hidden" style="background-image: url('assets/textures/granny.jpg');">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <!-- Play Button: Mapped to C++ coordinates 955, 570, 200, 40 -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <button class="menu-btn" id="btn-start" style="left: 955px; top: 570px; width: 200px; height: 40px;"></button>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <!-- Exit Button: Mapped to C++ coordinates 955, 644, 200, 40 -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <button class="menu-btn" id="btn-help-trigger" style="left: 955px; top: 644px; width: 200px; height: 40px;"></button>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- 3. GAMEPLAY INSTRUCTIONS / CLICK TO LOCK MOUSE -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <div id="instructions" class="hidden">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <div style="font-size: 40px; font-weight: 700; color: var(--accent); margin-bottom: 20px;">SİSTEME ODAKLAN</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <div style="font-size: 18px; color: var(--muted); max-width: 600px; line-height: 1.8; text-align: center;">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            Mouse'u kilitlemek ve oyuna odaklanmak için ekrana tıklayın.<br><br>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            <strong style="color: var(--accent);">HAREKET:</strong> W, A, S, D tuşları (Uçuş Modu)<br>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            <strong style="color: var(--accent);">YUKARI / AŞAĞI UÇMA:</strong> Space (Boşluk) / C tuşları<br>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            <strong style="color: var(--accent);">ETKİLEŞİM / EŞYA ALMA:</strong> Sol Tık veya E tuşu<br>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            <strong style="color: var(--accent);">GERİ DÖN / ÇIKIŞ:</strong> ESC tuşu
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <button class="instruction-btn">BAĞLAN</button>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- 4. IN-GAME HUD -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <div id="hud" style="display: none;">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <div class="hud-msg-box" id="hud-message">Yalnız olduğunu sanıyordun. Yanılıyordun. Vertex seni izliyor!</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <div class="hud-top">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            <div class="hud-card">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                <div class="hud-card-title">YAŞAM</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                <div class="hud-card-value danger" id="hud-lives">Can: ❤️❤️❤️</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            <div class="hud-card">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                <div class="hud-card-title">ENVANTER</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                <div class="hud-card-value" id="hud-inventory">Boş</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <div class="hud-center">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            <div class="crosshair" id="crosshair"></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            <div class="interaction-prompt" id="interact-prompt">Almak için Tıkla (E)</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- 5. GAME LOSE SCREEN -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <div id="screen-lose" class="aspect-container hidden" style="background-image: url('assets/textures/end.jpg');">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <!-- Restart Button: Mapped to C++ coordinates 830, 607, 400, 33 -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <button class="menu-btn" id="btn-restart-lose" style="left: 830px; top: 607px; width: 400px; height: 33px;"></button>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <!-- Menu Button: Mapped to C++ coordinates 830, 644, 400, 33 -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <button class="menu-btn btn-danger" id="btn-menu-lose" style="left: 830px; top: 644px; width: 400px; height: 33px;"></button>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- 6. GAME WIN SCREEN -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <div id="screen-win" class="aspect-container hidden" style="background-image: url('assets/textures/win.jpg');">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <!-- Restart Button: Mapped to C++ coordinates 830, 607, 400, 33 -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <button class="menu-btn" id="btn-restart-win" style="left: 830px; top: 607px; width: 400px; height: 33px;"></button>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <!-- Menu Button: Mapped to C++ coordinates 830, 644, 400, 33 -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <button class="menu-btn" id="btn-menu-win" style="left: 830px; top: 644px; width: 400px; height: 33px;"></button>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- Three.js Libraries -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- Game Javascript -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Strip comments and parse JSONC
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function parseJSONC(text) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            let clean = text.replace(/\/\*[\s\S]*?\*\//g, "");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            clean = clean.replace(/(^|[^:])\/\/.*$/gm, "$1");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            clean = clean.replace(/,(\s*[}\]])/g, "$1");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            return JSON.parse(clean);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Global UI Scaling helper to keep buttons aligned under all window sizes
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function scaleUI() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const containers = document.querySelectorAll('.aspect-container');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            containers.forEach(c => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                c.style.transform = `translate(-50%, -50%) scale(${scale})`;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        window.addEventListener('resize', scaleUI);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Global Game State
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        const state = {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            config: null,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            textures: {},
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            meshes: {},
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            sounds: {},
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            lives: 3,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            inventory: [],
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            isGameRunning: false,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            playerStartPos: new THREE.Vector3(55, 8, 18),
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            grannyStartPos: new THREE.Vector3(50, 5.7, 23),
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            messageDuration: 5000,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            messageTimer: 0,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            activeMessage: ""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // UI Helpers
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function showHUDMessage(text) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            document.getElementById('hud-message').innerText = text;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            state.activeMessage = text;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            state.messageTimer = Date.now() + state.messageDuration;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function updateHUD() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            let heartStr = "Can: ";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            for (let i = 0; i < state.lives; i++) heartStr += "❤️";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            document.getElementById('hud-lives').innerText = heartStr;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const invStr = state.inventory.length > 0 ? state.inventory.map(item => `[ ${item.toUpperCase()} ]`).join(", ") : "Boş";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            document.getElementById('hud-inventory').innerText = invStr;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Sound System Wrapper
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function initSoundSystem() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const audioFiles = {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                menu: 'assets/audio/menu.mp3',
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                win: 'assets/audio/secret.mp3',
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                spotted: 'assets/audio/14. Spotted.mp3',
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                scream: 'assets/audio/scream.mp3',
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                scaryMusic: 'assets/audio/granny_house_music.mp3',
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                doorOpen: 'assets/audio/openDoor.mp3',
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                pickup: 'assets/audio/walking-on-a-wooden-floor-14743.mp3'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            for (let key in audioFiles) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                state.sounds[key] = new Audio(audioFiles[key]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function playSound(key, loop = false) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (state.sounds[key]) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                try {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    state.sounds[key].loop = loop;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    state.sounds[key].currentTime = 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    state.sounds[key].play().catch(e => console.log("Audio play deferred: press start."));
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                } catch(e) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    console.log("Audio play error:", e);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function stopSound(key) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (state.sounds[key]) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                try {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    state.sounds[key].pause();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                } catch(e) {}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function stopAllSounds() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            for (let key in state.sounds) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                stopSound(key);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Load game assets
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        async function loadGame() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            try {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const response = await fetch('config/granny.jsonc');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (!response.ok) throw new Error("granny.jsonc bulunamadı.");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const rawText = await response.text();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                state.config = parseJSONC(rawText);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                // Initialize Sound System
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                initSoundSystem();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                // Setup asset loaders
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const textureLoader = new THREE.TextureLoader();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const objLoader = new THREE.OBJLoader();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const textureList = state.config.scene.assets.textures;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const meshList = state.config.scene.assets.meshes;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const totalAssets = Object.keys(textureList).length + Object.keys(meshList).length;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                let loadedCount = 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                function updateProgress() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    loadedCount++;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    const pct = Math.floor((loadedCount / totalAssets) * 100);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    document.getElementById('load-progress').style.width = pct + '%';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    document.getElementById('load-status').innerText = `Gerekli kaynaklar indiriliyor (%${pct}) - ${loadedCount}/${totalAssets}`;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                // Load Textures
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                for (let key in textureList) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    const url = textureList[key];
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    state.textures[key] = await new Promise((resolve) => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        textureLoader.load(url, 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            (tex) => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                tex.wrapS = THREE.RepeatWrapping;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                tex.wrapT = THREE.RepeatWrapping;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                updateProgress();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                resolve(tex);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            },
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            undefined,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            () => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                updateProgress();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                resolve(null);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        );
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                // Load Meshes (OBJ files)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                for (let key in meshList) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    const url = meshList[key];
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    state.meshes[key] = await new Promise((resolve) => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        objLoader.load(url, 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            (obj) => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                updateProgress();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                resolve(obj);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            },
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            undefined,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            (err) => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                updateProgress();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                resolve(new THREE.Group());
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        );
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                buildWorld(); // Build 3D scene from JSON config
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                setTimeout(() => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    document.getElementById('screen-loading').classList.add('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    document.getElementById('screen-menu').classList.remove('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    playSound('menu', true);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }, 1000);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            } catch (err) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                console.error("Yükleme Hatası:", err);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                document.getElementById('load-status').innerText = `Yükleme Hatası: ${err.message}`;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Initialize 3D Scene and Gameplay Loop
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        let scene, camera, renderer, controls;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        let keysPressed = {};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        const velocity = new THREE.Vector3();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        const direction = new THREE.Vector3();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        const colliders = []; // Static colliders with bounding boxes
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        const interactiveEntities = []; // Interactive items (keys, doors, etc.)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        let grannyMesh = null;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        let lastTime = performance.now();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        let grannyTimer = 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        let hitFlashTimer = 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function init3D() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const container = document.getElementById('container3d');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            scene = new THREE.Scene();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            scene.background = new THREE.Color(0x0a0d14);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            scene.fog = new THREE.FogExp2(0x0a0d14, 0.05);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            renderer.shadowMap.enabled = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            container.appendChild(renderer.domElement);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            controls = new THREE.PointerLockControls(camera, document.body);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // Handle resize
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            window.addEventListener('resize', () => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                camera.aspect = window.innerWidth / window.innerHeight;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                camera.updateProjectionMatrix();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                renderer.setSize(window.innerWidth, window.innerHeight);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // Keyboard listeners
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            window.addEventListener('keydown', (e) => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                keysPressed[e.key.toLowerCase()] = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                // Interaction on 'E'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (e.key.toLowerCase() === 'e') {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    checkInteractions();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            window.addEventListener('keyup', (e) => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                keysPressed[e.key.toLowerCase()] = false;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // Interaction on Left Click (only when locked, don't interfere with UI clicks)
+
+            renderer.domElement.addEventListener('mousedown', (e) => {
+
+                if (e.button === 0 && controls.isLocked) {
+
+                    checkInteractions();
+
+                }
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Helper to construct materials from config
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function getMaterial(matKey) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const mats = state.config.scene.assets.materials;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (!mats || !mats[matKey]) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                return new THREE.MeshPhongMaterial({ color: 0xcccccc });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const matConfig = mats[matKey];
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // If it's a textured material
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (matConfig.diffuse && state.textures[matConfig.diffuse]) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const tex = state.textures[matConfig.diffuse];
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const mat = new THREE.MeshPhongMaterial({
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    map: tex,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    color: matConfig.tint ? new THREE.Color(matConfig.tint[0], matConfig.tint[1], matConfig.tint[2]) : 0xffffff,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    side: THREE.DoubleSide
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                // Apply transparency if needed (e.g. wall or glass)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (matKey === "house" || matKey === "wall") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    mat.transparent = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    mat.opacity = 0.65;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                return mat;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // Fallback solid color
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            return new THREE.MeshPhongMaterial({
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                color: matConfig.tint ? new THREE.Color(matConfig.tint[0], matConfig.tint[1], matConfig.tint[2]) : 0xcccccc
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function createEntity(entData) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            let entGroup = new THREE.Group();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            entGroup.name = entData.name;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // Position, rotation, scale
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (entData.position) entGroup.position.set(entData.position[0], entData.position[1], entData.position[2]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (entData.rotation) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                entGroup.rotation.set(
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    THREE.MathUtils.degToRad(entData.rotation[0]),
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    THREE.MathUtils.degToRad(entData.rotation[1]),
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    THREE.MathUtils.degToRad(entData.rotation[2])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                );
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (entData.scale) entGroup.scale.set(entData.scale[0], entData.scale[1], entData.scale[2]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // Parse components
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (entData.components) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                entData.components.forEach(comp => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    if (comp.type === "Mesh Renderer") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        const meshObj = state.meshes[comp.mesh];
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        if (meshObj) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            const clonedMesh = meshObj.clone();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            const material = getMaterial(comp.material);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            clonedMesh.traverse(child => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                if (child.isMesh) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                    child.material = material;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                    child.castShadow = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                    child.receiveShadow = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            entGroup.add(clonedMesh);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    if (comp.type === "Spot Light") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        const color = comp.color ? new THREE.Color(comp.color[0], comp.color[1], comp.color[2]) : 0xffffff;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        const light = new THREE.SpotLight(color, 25.0, 100, THREE.MathUtils.degToRad(45), 0.5, 1.0);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        light.castShadow = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        const targetObj = new THREE.Object3D();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        targetObj.position.set(0, 0, -10); // Point forward
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        entGroup.add(targetObj);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        light.target = targetObj;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        entGroup.add(light);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    if (comp.type === "Point Light") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        const color = comp.color ? new THREE.Color(comp.color[0], comp.color[1], comp.color[2]) : 0xffffff;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        const light = new THREE.PointLight(color, 12.0, 40, 1.0);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        light.castShadow = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        entGroup.add(light);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // Process children recursively
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (entData.children) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                entData.children.forEach(childData => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    const childGroup = createEntity(childData);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    entGroup.add(childGroup);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            return entGroup;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function buildWorld() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const entities = state.config.scene.world;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // Default ambient light (enhanced so the environment is slightly visible even without flashlight)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const ambientLight = new THREE.AmbientLight(0x444444);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            scene.add(ambientLight);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            entities.forEach(ent => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (ent.name === "player") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    // Initialize player position
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    camera.position.set(ent.position[0], ent.position[1], ent.position[2]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    // Process player children (hand, flashlight) and attach them directly to the camera!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    if (ent.children) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        ent.children.forEach(childData => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            const childGroup = createEntity(childData);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            // Positioning hand and flash to fit camera first-person view
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            if (childData.name === "hand") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                childGroup.position.set(0.4, -0.4, -0.8);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            } else if (childData.name === "flash") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                childGroup.position.set(0, 0, 0);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            camera.add(childGroup);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    scene.add(camera);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    return;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                let entGroup = createEntity(ent);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                scene.add(entGroup);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                // Handle static collision items - EXCLUDE "house" so player doesn't get stuck inside the house bounds!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const collisionExclusions = ["player", "hand", "collided", "granny", "spider", "house"];
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const isExcluded = collisionExclusions.includes(ent.name) || ent.name.startsWith("key") || ent.name === "screw" || ent.name === "hummer" || ent.name === "masterKey";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (!isExcluded) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    entGroup.updateMatrixWorld(true);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    const box = new THREE.Box3().setFromObject(entGroup);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    if (!box.isEmpty()) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        colliders.push({
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            name: ent.name,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            box: box,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            group: entGroup
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                // Setup interactive entities
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const interactiveItems = [
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    "key1", "key2", "key3", "key4", "key5", "key6",
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    "screw", "hummer", "masterKey",
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    "door1", "door2", "door3", "door4", "door5", "door6", "masterdoor",
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    "drawer"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                ];
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (interactiveItems.includes(ent.name) || ent.name.startsWith("door") || ent.name.startsWith("key")) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    interactiveEntities.push({
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        name: ent.name,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        group: entGroup,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        unlocked: false,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        pickedUp: false
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                // Track Granny
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (ent.name === "granny") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    grannyMesh = entGroup;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // Adjust textures repeat settings for specific walls
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            scene.traverse(child => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (child.isMesh && child.material && child.material.map) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    child.material.map.repeat.set(1, 1);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    child.material.map.needsUpdate = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Gameplay check interaction
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function checkInteractions() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const raycaster = new THREE.Raycaster();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // Find closest interactive entity within 4.0 meters
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            let closest = null;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            let minDist = 4.0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            interactiveEntities.forEach(ent => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (ent.pickedUp || ent.unlocked) return;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const dist = camera.position.distanceTo(ent.group.position);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (dist < minDist) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    closest = ent;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    minDist = dist;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (closest) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                interactWith(closest);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function interactWith(item) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const name = item.name;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // 1. Picking up items
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (name.startsWith("key") && name !== "masterdoor") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                item.pickedUp = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                item.group.visible = false;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                state.inventory.push(name);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                playSound('pickup');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                updateHUD();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (name === "key1") showHUDMessage("Gerekli kapiyi ara.");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                else showHUDMessage(`${name.toUpperCase()} bulundu!`);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            } else if (name === "screw") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                item.pickedUp = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                item.group.visible = false;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                state.inventory.push("screw");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                playSound('pickup');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                updateHUD();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                showHUDMessage("Bu tornavida kapilari acmak icin yararli olabilir.");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            } else if (name === "hummer") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                item.pickedUp = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                item.group.visible = false;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                state.inventory.push("hummer");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                playSound('pickup');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                updateHUD();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                showHUDMessage("Çekiç alındı. Bunu çekmeceyi kırmak için kullanabilirsin.");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            } else if (name === "masterKey") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                item.pickedUp = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                item.group.visible = false;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                state.inventory.push("masterKey");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                playSound('pickup');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                updateHUD();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                showHUDMessage("Master Anahtar alındı! Çıkış kapısını açabilirsin!");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            } else if (name === "drawer") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (state.inventory.includes("hummer")) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    item.unlocked = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    item.group.visible = false;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    showHUDMessage("Çekmece çekiçle kırıldı! İçindeki Anahtar 1 açığa çıktı.");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    playSound('doorOpen');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    const key1 = interactiveEntities.find(e => e.name === "key1");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    if (key1) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        key1.group.position.copy(item.group.position);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                } else {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    showHUDMessage("Bunu acmak icin agir bir alete (cekic) ihtiyacin olabilir.");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            } else if (name.startsWith("door") || name === "masterdoor") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                let requiredKey = "";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                let doorLabel = "";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (name === "door1") { requiredKey = "key1"; doorLabel = "Oturma Odası"; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                else if (name === "door2") { requiredKey = "key2"; doorLabel = "Yatak Odası"; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                else if (name === "door3") { requiredKey = "key3"; doorLabel = "İkinci Kat"; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                else if (name === "door4") { requiredKey = "key4"; doorLabel = "Özel Oda"; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                else if (name === "door5") { requiredKey = "key5"; doorLabel = "TV Odası"; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                else if (name === "door6") { requiredKey = "key6"; doorLabel = "Gizli Bölme"; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                else if (name === "masterdoor") { requiredKey = "masterKey"; doorLabel = "Dış Çıkış"; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (state.inventory.includes(requiredKey)) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    item.unlocked = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    playSound('doorOpen');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    item.group.rotation.y += Math.PI / 2;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    const colIdx = colliders.findIndex(c => c.name === name);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    if (colIdx !== -1) colliders.splice(colIdx, 1);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    const invIdx = state.inventory.indexOf(requiredKey);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    state.inventory.splice(invIdx, 1);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    updateHUD();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    if (name === "masterdoor") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        showHUDMessage("TEBRİKLER! VERTEX'TEN KAÇMAYI BAŞARDINIZ!");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        setTimeout(winGame, 1500);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    } else {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        showHUDMessage(`${doorLabel} Kapısı Açıldı.`);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                } else {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    if (name === "door1") showHUDMessage("Oturma odasina bak");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    else if (name === "door2") showHUDMessage("Yatak odasina bak");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    else if (name === "door3") showHUDMessage("Ikinci kata bak");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    else if (name === "door4") showHUDMessage("Tak tak. Kim o! Vertex mi?");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    else if (name === "door5") showHUDMessage("Televizyonun etrafini ara");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    else if (name === "door6") showHUDMessage("Anahtar evin icinde bir yerlerde gizlenmis olabilir.");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    else if (name === "masterdoor") showHUDMessage("Acele et, arkanda! Vertex seni izliyor! Çıkış için Master Anahtar lazım!");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Damage trigger
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function hitPlayer() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            state.lives--;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            updateHUD();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const flash = document.getElementById('damage-flash');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            flash.style.opacity = '1';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            setTimeout(() => { flash.style.opacity = '0'; }, 300);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            playSound('scream');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (state.lives <= 0) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                loseGame();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            } else {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                showHUDMessage(`YAKALANDINIZ! Canlar eksiliyor! Yeniden başlanıyor...`);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                camera.position.copy(state.playerStartPos);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (grannyMesh) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    grannyMesh.position.copy(state.grannyStartPos);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // End states
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function loseGame() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            state.isGameRunning = false;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            controls.unlock();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            stopAllSounds();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            document.getElementById('hud').style.display = 'none';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            document.getElementById('screen-lose').classList.remove('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function winGame() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            state.isGameRunning = false;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            controls.unlock();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            stopAllSounds();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            playSound('win');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            document.getElementById('hud').style.display = 'none';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            document.getElementById('screen-win').classList.remove('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Setup pointer lock & UI clicks
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function setupPointerLock() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const instructions = document.getElementById('instructions');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            document.getElementById('btn-start').addEventListener('click', () => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                document.getElementById('screen-menu').classList.add('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                instructions.classList.remove('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                stopAllSounds();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                playSound('scaryMusic', true);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                // Request Fullscreen
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                try {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    const de = document.documentElement;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    if (de.requestFullscreen) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        de.requestFullscreen();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    } else if (de.webkitRequestFullscreen) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        de.webkitRequestFullscreen();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    } else if (de.msRequestFullscreen) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        de.msRequestFullscreen();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                } catch (e) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    console.log("Fullscreen request failed:", e);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            instructions.addEventListener('click', () => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                controls.lock();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            controls.addEventListener('lock', () => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                instructions.classList.add('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                document.getElementById('hud').style.display = 'flex';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                state.isGameRunning = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                lastTime = performance.now();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                updateHUD();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            controls.addEventListener('unlock', () => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (state.isGameRunning) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    instructions.classList.remove('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    document.getElementById('hud').style.display = 'none';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            document.getElementById('btn-help-trigger').addEventListener('click', () => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                alert("Oyun Kontrolleri:\n\nHareket: WASD tuşları\nYön: Mouse hareketi\nEtkileşim (Kapı Açma / Eşya Alma): Sol Tık veya E tuşu\nÇıkış: ESC tuşu");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const resetState = () => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                state.lives = 3;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                state.inventory = [];
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                camera.position.copy(state.playerStartPos);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (grannyMesh) grannyMesh.position.copy(state.grannyStartPos);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                interactiveEntities.forEach(ent => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    ent.pickedUp = false;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    ent.unlocked = false;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    ent.group.visible = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // Bind Lose buttons (scaled coordinate regions in overlay)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            document.getElementById('btn-restart-lose').addEventListener('click', () => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                resetState();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                document.getElementById('screen-lose').classList.add('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                instructions.classList.remove('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                playSound('scaryMusic', true);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            document.getElementById('btn-menu-lose').addEventListener('click', () => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                resetState();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                document.getElementById('screen-lose').classList.add('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                document.getElementById('screen-menu').classList.remove('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                playSound('menu', true);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // Bind Win buttons
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            document.getElementById('btn-restart-win').addEventListener('click', () => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                resetState();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                document.getElementById('screen-win').classList.add('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                instructions.classList.remove('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                playSound('scaryMusic', true);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            document.getElementById('btn-menu-win').addEventListener('click', () => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                resetState();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                document.getElementById('screen-win').classList.add('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                document.getElementById('screen-menu').classList.remove('hidden');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                playSound('menu', true);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Collision Check Helper
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function checkCollisions(pos, proposedPos) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const playerBox = new THREE.Box3(
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                new THREE.Vector3(proposedPos.x - 0.6, proposedPos.y - 1.0, proposedPos.z - 0.6),
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                new THREE.Vector3(proposedPos.x + 0.6, proposedPos.y + 1.0, proposedPos.z + 0.6)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            );
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            for (let i = 0; i < colliders.length; i++) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const wall = colliders[i];
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (playerBox.intersectsBox(wall.box)) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    return true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            return false;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function updateInteractionPrompt() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            let closest = null;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            let minDist = 3.5;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            interactiveEntities.forEach(ent => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (ent.pickedUp || ent.unlocked) return;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const dist = camera.position.distanceTo(ent.group.position);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (dist < minDist) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    closest = ent;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    minDist = dist;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const prompt = document.getElementById('interact-prompt');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const crosshair = document.getElementById('crosshair');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (closest) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                prompt.classList.add('visible');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                crosshair.classList.add('active');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (closest.name.startsWith("door") || closest.name === "masterdoor") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    prompt.innerText = "Açmak için Tıkla (E)";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                } else if (closest.name === "drawer") {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    prompt.innerText = "Kırmak için Tıkla (E)";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                } else {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    prompt.innerText = "Almak için Tıkla (E)";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            } else {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                prompt.classList.remove('visible');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                crosshair.classList.remove('active');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (state.activeMessage !== "" && Date.now() > state.messageTimer) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                state.activeMessage = "";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                document.getElementById('hud-message').innerText = "Yalnız olduğunu sanıyordun. Yanılıyordun. Vertex seni izliyor!";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Gameplay Animation Loop
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function animate() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            requestAnimationFrame(animate);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (!state.isGameRunning) return;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const time = performance.now();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const delta = (time - lastTime) / 1000;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            lastTime = time;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const speed = 15.0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const moveVec = new THREE.Vector3();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (keysPressed['w']) moveVec.z -= 1;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (keysPressed['s']) moveVec.z += 1;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (keysPressed['a']) moveVec.x -= 1;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (keysPressed['d']) moveVec.x += 1;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (keysPressed['q'] || keysPressed[' ']) moveVec.y += 1; // Q or Space to fly up
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (keysPressed['c'] || keysPressed['control']) moveVec.y -= 1; // C or Control to fly down
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            moveVec.normalize();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const currentSpeed = keysPressed['shift'] ? speed * 2.0 : speed;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const camDir = new THREE.Vector3();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            camera.getWorldDirection(camDir);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const rightVec = new THREE.Vector3();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            rightVec.crossVectors(camDir, camera.up).normalize();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const moveDir = new THREE.Vector3();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            moveDir.addScaledVector(camDir, -moveVec.z);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            moveDir.addScaledVector(rightVec, moveVec.x);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            moveDir.y += moveVec.y;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            const proposedPos = camera.position.clone().addScaledVector(moveDir, currentSpeed * delta);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (!checkCollisions(camera.position, proposedPos)) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                camera.position.copy(proposedPos);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (camera.position.y < 1.0) camera.position.y = 1.0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (camera.position.y > 15.0) camera.position.y = 15.0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // Granny AI movement logic (Idle at start, then patrols with C++ nodes)
+            if (grannyMesh) {
+                // Track if player is moving (creating "noise" like C++ MADE_NOISE event)
+                const isPlayerMoving = keysPressed['w'] || keysPressed['s'] || keysPressed['a'] || keysPressed['d'] || keysPressed['q'] || keysPressed['c'] || keysPressed[' '];
+                
+                // Only advance timer when player is making noise (mimicking C++ MADE_NOISE event)
+                if (isPlayerMoving) {
+                    grannyTimer += delta;
+                }
+
+                // Define the 15 patrol nodes from granny-system.cpp
+                const nodes = [
+                    new THREE.Vector3(3.7, 11.4, 25.7),
+                    new THREE.Vector3(46.85, 11.4, 20.2),
+                    new THREE.Vector3(52.0, 11.4, 19.1),
+                    new THREE.Vector3(57.6, 11.4, 14.8),
+                    new THREE.Vector3(48.45, 7.8, 20.2),
+                    new THREE.Vector3(53.0, 7.8, 23.3),
+                    new THREE.Vector3(50.0, 5.7, 23.0),
+                    new THREE.Vector3(44.7, 10.1, 25.45),
+                    new THREE.Vector3(57.0, 10.8, 19.63),
+                    new THREE.Vector3(57.8, 7.16, 18.2),
+                    new THREE.Vector3(47.7, 6.65, 21.45),
+                    new THREE.Vector3(50.8, 4.7, 28.4),
+                    new THREE.Vector3(54.8, 11.2, 18.7),
+                    new THREE.Vector3(54.0, 7.3, 23.0),
+                    new THREE.Vector3(45.7, 11.25, 14.45)
+                ];
+
+                // Only patrol when player makes noise
+                if (isPlayerMoving) {
+                    const conditionDuration = 5.0;
+                    const nodeIndex = Math.floor(grannyTimer / conditionDuration) % nodes.length;
+                    const targetPos = nodes[nodeIndex];
+
+                    // Lerp Granny smoothly towards target node
+                    grannyMesh.position.lerp(targetPos, 1.5 * delta);
+
+                    // Look at the target direction
+                    const dir = new THREE.Vector3().subVectors(targetPos, grannyMesh.position);
+                    if (dir.lengthSq() > 0.01) {
+                        const angle = Math.atan2(dir.x, dir.z);
+                        grannyMesh.rotation.y = angle;
+                    }
+                }
+
+                // Capture distance exactly 3.0 like C++ (always check, even when idle)
+                const distToPlayer = camera.position.distanceTo(grannyMesh.position);
+                if (distToPlayer < 3.0) {
+                    hitPlayer();
+                }
+            }
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (camera.position.y < 1.0) camera.position.y = 1.0;
+
+
+
+
+
+
+
+            
+
+
+
+
+
+
+
+            if (camera.position.y > 15.0) camera.position.y = 15.0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // Granny patrol & AI movement logic
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (grannyMesh) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                grannyTimer += delta;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                let targetY = 5.7;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const patrolCycle = grannyTimer % 60;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (patrolCycle < 20) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    targetY = 9.4; // 2nd Floor
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                } else if (patrolCycle < 40) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    targetY = 5.7; // 1st Floor
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                } else {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    targetY = 2.7; // Ground floor
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                grannyMesh.position.y = targetY;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const toPlayer = new THREE.Vector3().subVectors(camera.position, grannyMesh.position);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                toPlayer.y = 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                const distToPlayer = toPlayer.length();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if (distToPlayer < 20.0) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    toPlayer.normalize();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    grannyMesh.position.addScaledVector(toPlayer, 3.5 * delta); // Chase speed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    grannyMesh.lookAt(new THREE.Vector3(camera.position.x, grannyMesh.position.y, camera.position.z));
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    if (distToPlayer < 2.0) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        hitPlayer();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                } else {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    const radius = 8.0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    const angle = grannyTimer * 0.5;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    grannyMesh.position.x = state.grannyStartPos.x + Math.cos(angle) * radius;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    grannyMesh.position.z = state.grannyStartPos.z + Math.sin(angle) * radius;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    grannyMesh.rotation.y = angle + Math.PI / 2;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            updateInteractionPrompt();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            renderer.render(scene, camera);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Initialize App on DOM load
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        window.addEventListener('DOMContentLoaded', () => {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            init3D();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            setupPointerLock();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            loadGame();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            scaleUI();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            animate();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</body>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
